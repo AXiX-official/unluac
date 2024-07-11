@@ -1,15 +1,10 @@
 package unluac;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.util.Objects;
 
 import unluac.Configuration.Mode;
 import unluac.assemble.Assembler;
@@ -88,17 +83,11 @@ public class Main {
         System.out.println(version);
         break;
       case DECOMPILE: {
-        LFunction lmain = null;
         try {
-          lmain = file_to_function(fn, config);
+          decompile(fn, config.output, config);
         } catch(IOException e) {
           error(e.getMessage(), false);
         }
-        Decompiler d = new Decompiler(lmain);
-        Decompiler.State result = d.decompile();
-        Output output = config.getOutput();
-        d.print(result, output);
-        output.finish();
         break;
       }
       case DISASSEMBLE: {
@@ -193,7 +182,39 @@ public class Main {
   }
   
   public static void decompile(String in, String out, Configuration config) throws IOException {
-    LFunction lmain = file_to_function(in, config);
+    File inPath = new File(in);
+    if (inPath.isFile()){
+      decompileSingleFile(in, out, config);
+    } else if (inPath.isDirectory()) {
+      File outPath = new File(out);
+      if (!outPath.exists() && !outPath.mkdirs()) {
+        throw new IOException("Failed to create output directory " + outPath.getAbsolutePath());
+      }
+      decompileDirectory(inPath, outPath, config);
+    }
+  }
+
+  private static void decompileDirectory(File inDir, File outDir, Configuration config) throws IOException {
+    for (File file : Objects.requireNonNull(inDir.listFiles())) {
+      File outFile = new File(outDir, file.getName());
+      if (file.isDirectory()) {
+        if (!outFile.exists() && !outFile.mkdirs()) {
+          throw new IOException("Failed to create output directory " + outFile.getAbsolutePath());
+        }
+        decompileDirectory(file, outFile, config);
+      } else {
+        decompileSingleFile(file.getAbsolutePath(), outFile.getAbsolutePath(), config);
+      }
+    }
+  }
+  
+  private static void decompileSingleFile(String in, String out, Configuration config) throws IOException {
+    LFunction lmain = null;
+    try {
+      lmain = file_to_function(in, config);
+    } catch(IOException e) {
+      error(e.getMessage(), false);
+    }
     Decompiler d = new Decompiler(lmain);
     Decompiler.State result = d.decompile();
     Output output = new Output(new FileOutputProvider(new FileOutputStream(out)));
