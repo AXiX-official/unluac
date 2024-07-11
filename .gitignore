@@ -6,3 +6,5 @@ luac
 test/working
 *.orig
 *.rej
+.idea
+*.iml
